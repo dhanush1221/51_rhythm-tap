@@ -1,5 +1,9 @@
 import pygame
 import random
+import io
+import math
+import struct
+import wave
 from game.beat import Note, LANES, LANE_KEYS, LANE_LABELS, LANE_COLORS
 
 WIDTH, HEIGHT = 480, 640
@@ -13,12 +17,34 @@ class GameEngine:
     def __init__(self):
         pygame.init()
         pygame.mixer.init()
+        self.hit_sound = self._create_hit_sound()
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         pygame.display.set_caption("Rhythm Tap")
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont("monospace", 26, bold=True)
         self.big_font = pygame.font.SysFont("monospace", 44, bold=True)
         self.reset()
+
+    def _create_hit_sound(self):
+        # Generate a short local beep in memory so no external sound asset is required.
+        sample_rate = 44100
+        duration = 0.08
+        frequency = 880
+        samples = int(sample_rate * duration)
+        audio = bytearray()
+        for i in range(samples):
+            envelope = 1.0 - (i / samples)
+            sample = int(32767 * 0.25 * envelope * math.sin(2 * math.pi * frequency * i / sample_rate))
+            audio.extend(struct.pack('<h', sample))
+
+        wav_data = io.BytesIO()
+        with wave.open(wav_data, 'wb') as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(sample_rate)
+            wav_file.writeframes(audio)
+        wav_data.seek(0)
+        return pygame.mixer.Sound(file=wav_data)
 
     def reset(self):
         self.notes = []
@@ -75,6 +101,7 @@ class GameEngine:
             self.max_combo = max(self.max_combo, self.combo)
             self.score += pts * max(1, self.combo // 5)
             self.feedback.append([grade, col, 40, lane_x, HIT_Y - 30])
+            self.hit_sound.play()
         else:
             self.combo = 0
             self.feedback.append(["MISS", (220,60,60), 40, lane_x, HIT_Y - 30])
